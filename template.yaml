@@ -1,3 +1,74 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: 'AWS::Serverless-2016-10-31'
-Resources: {}
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  CookIt:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
+        - ResourceName: CookIt
+      StageName: !Ref EnvironmentAPIGatewayStageName
+      DefinitionBody:
+        swagger: '2.0'
+        info: {}
+        paths:
+          /:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetRecipe.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+  GetRecipe:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-GetRecipe
+      Description: !Sub
+        - Stack ${StackTagName} Environment ${EnvironmentTagName} Function ${ResourceName}
+        - ResourceName: GetRecipe
+      CodeUri: src
+      Handler: index.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 30
+      Tracing: Active
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Recipes
+      Events:
+        CookItGET:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+            RestApiId: !Ref CookIt
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Recipes
+          TABLE_ARN: !GetAtt Recipes.Arn
+  Recipes:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: recipeName
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: recipeName
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TableName: !Sub ${AWS::StackName}-Recipes
+Parameters:
+  StackTagName:
+    Type: String
+    Description: Stack Name (injected by Stackery at deployment time)
+  EnvironmentTagName:
+    Type: String
+    Description: Environment Name (injected by Stackery at deployment time)
+  EnvironmentAPIGatewayStageName:
+    Type: String
+    Description: Environment name used for API Gateway Stage names (injected by Stackery at deployment time)
