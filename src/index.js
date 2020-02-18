@@ -1,6 +1,10 @@
-exports.handler = async (event, context) => {
-  // Log the event argument for debugging and for use in local development.
-  console.log(JSON.stringify(event, undefined, 2));
-
-  return {};
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const recipeTable = process.env.TABLE_NAME;
+exports.handler = async function(event, context) {
+  console.log({ event });
+  const result = await dynamodb.scan({
+    TableName: recipeTable
+  }).promise();
+  return result;
 };
